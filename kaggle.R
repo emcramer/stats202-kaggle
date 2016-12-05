@@ -75,19 +75,46 @@ library(tree)
 set.seed(123)
 tree.training <- training[, -1]
 
-tree.training$Value <- log(tree.training$Value)
+tree.training$Value <- log(tree.training$Value) # log transform the values to produce a more normal distribution
 tree.training$Story <- as.factor(tree.training$Story)
 tree.training$Baths <- as.factor(tree.training$Baths)
 tree.training$Fireplaces <- as.factor(tree.training$Fireplaces)
 tree.training$Zip <- as.factor(tree.training$Zip)
 tree.training <- na.omit(tree.training)
 
-tree.fit <- tree(Value ~ ., data = tree.training[, -c(2, 4)])
-summary(tree.fit)
-plot(tree.fit)
-text(tree.fit, pretty = 1)
+# preliminary tree fit to get an idea of effectiveness
+houses.tree <- tree(Value ~ ., data = tree.training[, ])
+tree.s <- summary(tree.fit)
+tree.s
+plot(houses.tree)
+text(houses.tree, pretty = 1)
+mtext("Preliminary Regression Tree", side = 3, padj = -2, font = 2)
+mtext(paste("MSE: ", mean(tree.s$residuals^2)), side = 1, padj = 1)
 
+# maximizing tree efficacy with cross validation and pruning
+houses.treeCV <- cv.tree(houses.tree)
+plot(houses.treeCV$size, houses.treeCV$dev/houses.treeCV$size ,type = 'b', main = "CV Plot of Regression Tree", 
+     xlab = "Size of Tree", ylab = "Mean Deviances by Size")
+points(which.min(rev(houses.treeCV$dev)), min(houses.treeCV$dev/houses.treeCV$size), col = "red", pch = 19)
 
+# prune tree maybe?
+# houses.pruned =prune.tree(houses.tree, best = 7)
+# plot(houses.prune)
+# text(houses.prune, pretty = 0)
 
+### --- PRELIMINARY TEST --- ###
+
+testnow <- test[, -1]
+testnow$Story <- as.factor(testnow$Story)
+testnow$Baths <- as.factor(testnow$Baths)
+testnow$Fireplaces <- as.factor(testnow$Fireplaces)
+testnow$Zip <- as.factor(testnow$Zip)
+testnow <- na.omit(testnow)
+
+preds <- predict(houses.tree, newdata = testnow) # estimated test values
+preds <- exp(preds)
+estimates <- cbind(1:10, preds)
+colnames(estimates) <- c("ID", "Predicted")
+write.csv(estimates, "test-predictions.csv", row.names = FALSE)
 
 
