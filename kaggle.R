@@ -82,6 +82,14 @@ tree.training$Fireplaces <- as.factor(tree.training$Fireplaces)
 tree.training$Zip <- as.factor(tree.training$Zip)
 tree.training <- na.omit(tree.training)
 
+tree.testing <- testing[, -1]
+tree.testing$Value <- log(tree.testing$Value) # log transform the values to produce a more normal distribution
+tree.testing$Story <- as.factor(tree.testing$Story)
+tree.testing$Baths <- as.factor(tree.testing$Baths)
+tree.testing$Fireplaces <- as.factor(tree.testing$Fireplaces)
+tree.testing$Zip <- as.factor(tree.testing$Zip)
+tree.testing <- na.omit(tree.testing)
+
 # preliminary tree fit to get an idea of effectiveness
 houses.tree <- tree(Value ~ ., data = tree.training[, ])
 tree.s <- summary(tree.fit)
@@ -90,6 +98,10 @@ plot(houses.tree)
 text(houses.tree, pretty = 1)
 mtext("Preliminary Regression Tree", side = 3, padj = -2, font = 2)
 mtext(paste("MSE: ", mean(tree.s$residuals^2)), side = 1, padj = 1)
+
+# calculate test MSE
+tree.preds <- predict(houses.tree, newdata = tree.testing) # estimated test values
+tree.testmse <- exp(mean((tree.preds - tree.testing$Value)^2)) # scaled to the original data 
 
 # maximizing tree efficacy with cross validation and pruning
 houses.treeCV <- cv.tree(houses.tree)
@@ -102,6 +114,24 @@ points(which.min(rev(houses.treeCV$dev)), min(houses.treeCV$dev/houses.treeCV$si
 # plot(houses.prune)
 # text(houses.prune, pretty = 0)
 
+# Boost the tree
+library(gbm)
+set.seed(123)
+lambdas <- seq(from = 0.0001, to = 0.001, length.out = 10)
+errs <- rep(NA, 10)
+for(i in 1:length(lambdas)){
+  houses.boost <- gbm(Value ~., data = tree.training, distribution= "gaussian", n.trees = 5000, shrinkage = lambdas[i])
+  boost.s <- summary(houses.boost)
+  #plot(houses.boost, main = "Boosting Results")
+  preds.boost <- predict (houses.boost, newdata = tree.testing, n.trees =5000)
+  boost.testmse <- exp(mean((preds.boost - tree.testing$Value)^2))
+  errs[i] <- boost.testmse
+}
+plot(lambdas, errs, main = "Test MSE by Shrinkage", type = 'b', xlab = "Shrinkage (Lambda)", ylab = "Test MSE")
+points(lambdas[which.min(errs)], min(errs), col = "red", pch = 19)
+
+houses.boost <- gmb(Value ~., data = tree.training, distribution = "gaussian", n.trees = 5000, shrinkage = lambda[which.min(errs)])
+
 ### --- PRELIMINARY TEST --- ###
 
 testnow <- test[, -1]
@@ -111,10 +141,11 @@ testnow$Fireplaces <- as.factor(testnow$Fireplaces)
 testnow$Zip <- as.factor(testnow$Zip)
 testnow <- na.omit(testnow)
 
-preds <- predict(houses.tree, newdata = testnow) # estimated test values
+preds <- predict(houses.boost, newdata = testnow, n.trees = 5000) # estimated test values
 preds <- exp(preds)
 estimates <- cbind(1:10, preds)
 colnames(estimates) <- c("ID", "Predicted")
 write.csv(estimates, "test-predictions.csv", row.names = FALSE)
+View(cbind(estimates[, 1], testnow, estimates[, 2]))
 
 
